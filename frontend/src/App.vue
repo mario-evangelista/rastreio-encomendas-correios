@@ -27,11 +27,9 @@ const trackPackage = async () => {
   loading.value = true
 
   try {
-    //const response = await axios.post('/api/track', { code: trackingCode.value })
     const response = await axios.post('https://api-proxy-labs-wonca.onrender.com/api/track', { code: trackingCode.value })
 
     const result = JSON.parse(response.data.json)
-    console.log('Tracking Result:', result)
 
     if (result.erro) {
       error.value = result.mensagem || 'Erro ao consultar o rastreio. Verifique o código ou tente novamente.'
@@ -41,10 +39,6 @@ const trackPackage = async () => {
 
     trackingResult.value = result
     if (trackingResult.value.eventos) {
-      trackingResult.value.eventos.forEach(event => {
-        console.log('Event Unidade:', event.unidade)
-      })
-
       // Remove any existing history entry with the same codObjeto
       if (trackingResult.value.codObjeto) {
         trackingHistory.value = trackingHistory.value.filter(
@@ -63,7 +57,6 @@ const trackPackage = async () => {
     }
   } catch (err) {
     error.value = 'Erro ao consultar o rastreio. Verifique o código ou tente novamente.'
-    console.error('API Error:', err)
   } finally {
     loading.value = false
   }
