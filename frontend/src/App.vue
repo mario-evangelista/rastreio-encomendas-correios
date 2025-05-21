@@ -237,6 +237,14 @@ const getLatestStatus = (result) => {
   font-weight: 500;
 }
 
+.v-card-title.text-h5 {
+  text-align: center;
+}  
+
+.v-card-title.text-h2 {
+  text-align: center;
+}    
+
 .v-timeline-item .v-card {
   margin-bottom: 16px;
 }
