@@ -136,7 +136,7 @@ const getLatestStatus = (result) => {
     <v-row justify="center">
       <v-col cols="12" md="8">
         <v-card class="pa-4">
-          <v-card-title class="text-h1">Trackin - App</v-card-title>
+          <v-card-title class="text-h2">Trackin - App</v-card-title>
           <v-card-title class="text-h5">Rastreamento de Encomendas - Correios</v-card-title>
           <v-card-text>
             <v-form @submit.prevent="trackPackage">
