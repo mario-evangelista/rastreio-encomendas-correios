@@ -1,0 +1,12 @@
+body {
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+}
+
+.v-container {
+  padding: 16px;
+}
+
+.v-chip.success {
+  font-weight: bold;
+}
