@@ -1,3 +1,4 @@
+// vite.config.mjs
 import { defineConfig } from "vite";
 import Vue from "@vitejs/plugin-vue";
 import VueRouter from "unplugin-vue-router/vite";
@@ -38,27 +39,46 @@ export default defineConfig({
       vueTemplate: true,
     }),
     VitePWA({
-      registerType: "auto",
-      devOptions: { enabled: true },
+      registerType: "autoUpdate",
+      devOptions: { enabled: false }, // Disable in dev
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg}"],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        // Exclude Firebase-related paths to avoid conflicts
+        skipWaiting: true,
+        globIgnores: [
+          "firebase-messaging-sw.js",
+          "**/firebase-cloud-messaging-push-scope/**",
+        ],
         navigateFallbackDenylist: [
           /^\/firebase-cloud-messaging-push-scope/,
-          /^\/firebase-messaging-sw\.js$/, // Explicitly exclude the Firebase Service Worker
+          /^\/firebase-messaging-sw\.js$/,
         ],
-        // Prevent Workbox from caching the Firebase Service Worker
         runtimeCaching: [
           {
             urlPattern: /^\/firebase-messaging-sw\.js$/,
-            handler: "NetworkOnly", // Ensure this file is always fetched from the network
+            handler: "NetworkOnly",
           },
         ],
       },
-      // Explicitly include the Firebase Service Worker in the manifest
-      includeAssets: ["firebase-messaging-sw.js"],
+      includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png"],
+      manifest: {
+        name: "Your App Name",
+        short_name: "App",
+        theme_color: "#ffffff",
+        icons: [
+          {
+            src: "/android-chrome-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/android-chrome-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+        ],
+      },
     }),
   ],
   resolve: {
@@ -73,6 +93,5 @@ export default defineConfig({
       },
     },
   },
-  // Ensure the base is set to root
   base: "/",
 });

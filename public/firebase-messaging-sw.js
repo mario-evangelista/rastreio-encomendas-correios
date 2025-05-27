@@ -1,54 +1,50 @@
-// public/firebase-messaging-sw.js (excerpt)
-self.addEventListener("notificationclick", function (event) {
-  console.log(
-    "[firebase-messaging-sw.js] Notificação clicada:",
-    event.notification.data
-  );
-  event.notification.close();
+importScripts(
+  "https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"
+);
+importScripts(
+  "https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"
+);
 
-  const urlToOpen = event.notification.data?.url || "http://localhost:3000";
-  try {
-    new URL(urlToOpen);
-  } catch (err) {
-    console.warn("URL inválida na notificação:", urlToOpen);
-    return;
-  }
+const firebaseConfig = {
+  apiKey: "AIzaSyDhtch79wHOrYP_opPJ-vuhkETYm4GTXa4",
+  authDomain: "notification-push-2b889.firebaseapp.com",
+  projectId: "notification-push-2b889",
+  storageBucket: "notification-push-2b889.firebasestorage.app",
+  messagingSenderId: "1067959839671",
+  appId: "1:1067959839671:web:9d2742c52bdec2c5139632",
+  measurementId: "G-CZT5ZT4NX3",
+};
 
-  event.waitUntil(
-    clients
-      .matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if (
-            client.url.includes(new URL(urlToOpen).origin) &&
-            "focus" in client
-          ) {
-            console.log(
-              "[firebase-messaging-sw.js] Focando janela existente:",
-              client.url
-            );
-            client.focus();
-            if (client.url !== urlToOpen) {
-              client.navigate(urlToOpen);
-            }
-            return;
-          }
-        }
-        console.log(
-          "[firebase-messaging-sw.js] Abrindo nova janela:",
-          urlToOpen
-        );
-        return clients.openWindow(urlToOpen).then((windowClient) => {
-          if (windowClient && "focus" in windowClient) {
-            setTimeout(() => windowClient.focus(), 100); // Delayed focus for Windows 11
-          }
-        });
-      })
-      .catch((err) => {
-        console.error("Erro ao processar clique na notificação:", err);
-      })
-  );
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage((payload) => {
+  console.log("[firebase-messaging-sw.js] Push event received:", payload);
+  const notificationTitle = payload.notification?.title || "Nova Atualização";
+  const status = payload.notification?.body || "Seu pacote foi atualizado";
+
+  // Extrair o código de rastreamento da URL ou do payload
+  const url = payload.data?.url || "";
+  const trackingCodeMatch = url.match(/code=([A-Z0-9]+)/);
+  const trackingCodeFromPayload = trackingCodeMatch
+    ? trackingCodeMatch[1]
+    : "Desconhecido";
+
+  // Obter data/hora atual no formato brasileiro
+  const now = new Date();
+  const currentDateTime = now.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+  });
+
+  // Construir a mensagem com status, código e data/hora
+  const body = `${status}\nCódigo: ${trackingCodeFromPayload}\nData/Hora: ${currentDateTime}`;
+
+  const notificationOptions = {
+    body: body,
+    icon: payload.notification?.icon || "/icon.png",
+    data: { url: payload.data?.url || "http://localhost:3000" },
+    requireInteraction: payload.notification?.requireInteraction || true,
+  };
+
+  self.registration.showNotification(notificationTitle, notificationOptions);
 });

@@ -1,7 +1,7 @@
-// src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
+// Configuração do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDhtch79wHOrYP_opPJ-vuhkETYm4GTXa4",
   authDomain: "notification-push-2b889.firebaseapp.com",
@@ -12,30 +12,47 @@ const firebaseConfig = {
   measurementId: "G-CZT5ZT4NX3",
 };
 
-const app = initializeApp(firebaseConfig);
-export const messaging = getMessaging(app);
+// Inicializar Firebase
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log("✅ Firebase inicializado com sucesso.");
+} catch (err) {
+  console.error("❌ Erro ao inicializar Firebase:", err);
+}
 
-export async function solicitarToken(vapidKey, serviceWorkerRegistration) {
+// Inicializar Messaging
+let messaging;
+try {
+  messaging = getMessaging(app);
+  console.log("✅ Messaging inicializado com sucesso.");
+} catch (err) {
+  console.error("❌ Erro ao inicializar Messaging:", err);
+}
+
+const solicitarToken = async (vapidKey, registration) => {
   try {
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.warn("⚠️ Permissão de notificação negada:", permission);
-      return null;
-    }
-
     const token = await getToken(messaging, {
       vapidKey,
-      serviceWorkerRegistration,
+      serviceWorkerRegistration: registration,
     });
-    if (!token) {
-      console.warn("⚠️ Nenhum token FCM gerado.");
+    if (token) {
+      console.log("🔥 Token FCM obtido:", token);
+      return token;
+    } else {
+      console.warn("⚠️ Nenhum token FCM obtido.");
       return null;
     }
-
-    console.log("🔥 Token FCM obtido:", token);
-    return token;
   } catch (err) {
-    console.error("❌ Erro ao obter token FCM:", err);
+    console.error("❌ Erro ao solicitar token FCM:", err);
     return null;
   }
-}
+};
+
+// Testar se onMessage está disponível
+console.log(
+  "🔍 Verificando disponibilidade do onMessage:",
+  typeof onMessage === "function" ? "Disponível" : "Indisponível"
+);
+
+export { messaging, solicitarToken, onMessage };

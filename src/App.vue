@@ -1,200 +1,3 @@
-<script setup>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
-import { messaging, solicitarToken } from '@/firebase';
-import { onMessage } from 'firebase/messaging';
-
-const trackingCode = ref('');
-const trackingResult = ref(null);
-const error = ref('');
-const loading = ref(false);
-const trackingHistory = ref([]);
-const pushToken = ref(null);
-const snackbar = ref(false);
-const notificationMessage = ref('');
-
-const rules = [
-  (value) => !!value || 'Código de rastreio é obrigatório',
-  (value) => /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(value) || 'Código deve ter 13 caracteres (ex: AA123456789BR)',
-];
-
-const getFCMToken = async () => {
-  try {
-    const savedToken = localStorage.getItem('pushSubscriptionId');
-    if (savedToken) {
-      console.log('🔁 Token FCM reutilizado do localStorage:', savedToken);
-      pushToken.value = savedToken;
-      return savedToken;
-    }
-
-    const vapidKey = "BH360oAapgSM9MQwKP_TvJSVZlI2bncllkNGRpQw9Utx0EA5YwUwwJKZp3_GOeAmYvk0Wmuvo3LtArQ7y-XZidQ";
-    const token = await solicitarToken(vapidKey);
-    if (token) {
-      console.log('✅ Token FCM armazenado:', token);
-      pushToken.value = token;
-      localStorage.setItem('pushSubscriptionId', token);
-      return token;
-    } else {
-      console.warn('⚠️ Nenhum token FCM recuperado. A permissão pode não ter sido concedida.');
-      return null;
-    }
-  } catch (err) {
-    console.error('❌ Erro ao obter token FCM:', err);
-    error.value = 'Erro ao obter token de notificação: ' + err.message;
-    return null;
-  }
-};
-
-const registerPushToken = async (token, code) => {
-  try {
-    await axios.post('http://localhost:8080/api/register-push-token', {
-      trackingCode: code,
-      pushToken: token
-    });
-    console.log('Token FCM registrado para o código:', code);
-  } catch (err) {
-    console.warn('Falha ao registrar token FCM:', err.response?.data || err.message);
-    error.value = 'Falha ao registrar token: ' + (err.response?.data || err.message);
-  }
-};
-
-onMounted(async () => {
-  const savedHistory = localStorage.getItem('trackingHistory');
-  if (savedHistory) {
-    trackingHistory.value = JSON.parse(savedHistory);
-  }
-
-  try {
-    const permission = await Notification.requestPermission();
-    console.log('Permissão de notificação:', permission);
-
-    if (permission === 'granted') {
-      await getFCMToken();
-
-      onMessage(messaging, (payload) => {
-        console.log('Mensagem recebida em foreground:', payload);
-        const title = payload.notification?.title || 'Nova Atualização';
-        const body = payload.notification?.body || 'Seu pacote foi atualizado.';
-        notificationMessage.value = `${title}: ${body}`;
-        snackbar.value = true;
-      });
-    } else {
-      console.warn('Permissão de notificação negada.');
-    }
-  } catch (err) {
-    console.error('Erro ao inicializar notificações:', err);
-    error.value = 'Erro ao inicializar notificações push: ' + err.message;
-  }
-});
-
-const trackPackage = async () => {
-  error.value = '';
-  trackingResult.value = null;
-  loading.value = true;
-
-  try {
-    const response = await axios.post('http://localhost:8080/api/track', { code: trackingCode.value });
-    console.log('Resposta bruta /api/track:', response);
-
-    if (!response.data || typeof response.data !== 'object' || !('json' in response.data)) {
-      throw new Error('Resposta inválida do servidor: campo "json" ausente ou malformado.');
-    }
-
-    let result;
-    try {
-      const jsonString = response.data.json.trim();
-      if (typeof jsonString !== 'string') throw new Error('Campo JSON não é uma string.');
-      result = JSON.parse(jsonString);
-    } catch (parseErr) {
-      throw new Error('Erro ao interpretar resposta JSON: ' + parseErr.message);
-    }
-
-    if (result.erro) {
-      error.value = result.mensagem || 'Erro ao consultar o rastreio.';
-      return;
-    }
-
-    trackingResult.value = result;
-
-    if (trackingResult.value.eventos) {
-      if (trackingResult.value.codObjeto) {
-        trackingHistory.value = trackingHistory.value.filter(
-          entry => entry.result.codObjeto !== trackingResult.value.codObjeto
-        );
-      }
-
-      const historyEntry = {
-        code: trackingCode.value,
-        result: trackingResult.value,
-        timestamp: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-      };
-      trackingHistory.value.unshift(historyEntry);
-      localStorage.setItem('trackingHistory', JSON.stringify(trackingHistory.value));
-
-      const token = pushToken.value || await getFCMToken();
-      if (token) {
-        await registerPushToken(token, trackingCode.value);
-      } else {
-        console.warn('Nenhum token FCM disponível para registrar.');
-      }
-    }
-  } catch (err) {
-    error.value = err.response?.data?.message || 'Erro ao consultar o rastreio: ' + err.message;
-    console.error('Erro de rastreamento:', err);
-  } finally {
-    loading.value = false;
-  }
-};
-
-const formatDateTime = (dateObj) => {
-  if (!dateObj?.date) return '-';
-  const date = new Date(dateObj.date.replace(' ', 'T'));
-  return date.toLocaleString('pt-BR', { timeZone: dateObj.timezone || 'America/Sao_Paulo' });
-};
-
-const getLocation = (unidade) => {
-  if (!unidade) return '-, -';
-  const city = unidade.endereco?.cidade || unidade.nome || '-';
-  const uf = unidade.endereco?.uf || '-';
-  return `${city}, ${uf}`;
-};
-
-const getTransitDays = () => {
-  const eventos = trackingResult.value?.eventos || [];
-  const postagem = eventos.find(e => e.descricaoFrontEnd === 'Postado');
-  const entrega = eventos.find(e => e.descricaoFrontEnd === 'ENTREGUE');
-
-  if (!postagem) return { days: '-', label: 'dias' };
-
-  const start = new Date(postagem.dtHrCriado.date.replace(' ', 'T'));
-  const end = entrega ? new Date(entrega.dtHrCriado.date.replace(' ', 'T')) : new Date();
-
-  const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-  return { days: diff, label: diff === 1 ? 'dia' : 'dias' };
-};
-
-const getEventColor = (event) => {
-  if (event.finalizador === 'S') return 'success';
-  if (event.descricaoFrontEnd === 'Postado') return 'teal';
-  return 'primary';
-};
-
-const viewHistoryEntry = (entry) => {
-  trackingCode.value = entry.code;
-  trackingResult.value = entry.result;
-  error.value = '';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-const formatTimestamp = (timestamp) => {
-  return new Date(timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-};
-
-const getLatestStatus = (result) => {
-  return result?.eventos?.[0]?.descricaoFrontEnd || '-';
-};
-</script>
-
 <template>
   <v-container>
     <v-row justify="center">
@@ -320,6 +123,329 @@ const getLatestStatus = (result) => {
     </v-row>
   </v-container>
 </template>
+
+<script setup>
+import { ref, onMounted } from "vue";
+import axios from "axios";
+import { messaging, solicitarToken, onMessage } from "@/firebase";
+
+// Reactive state
+const trackingCode = ref("");
+const trackingResult = ref(null);
+const error = ref("");
+const loading = ref(false);
+const trackingHistory = ref([]);
+const pushToken = ref(null);
+const snackbar = ref(false);
+const notificationMessage = ref("");
+const valid = ref(false);
+const form = ref(null);
+
+// Environment configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+
+// Validation rules for tracking code
+const rules = [
+  (value) => !!value || "Código de rastreio é obrigatório",
+  (value) => /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(value) || "Código deve ter 13 caracteres (ex: AA123456789BR)",
+];
+
+// Fetch FCM token
+const getFCMToken = async () => {
+  try {
+    const savedToken = localStorage.getItem("pushSubscriptionId");
+    if (savedToken) {
+      console.log("🔁 Token FCM reutilizado do localStorage:", savedToken);
+      pushToken.value = savedToken;
+      return savedToken;
+    }
+
+    const vapidKey = "BK9SnBv4o6WH83EoTlFLmGorhKa_1b9GoG3iSvAQ_HvUFtX5CjJHR1vB08emtbFH6iGEai-Sq-GfJj0qbrd_39w";
+    const registration = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
+    if (!registration) {
+      console.error("❌ Service Worker não registrado");
+      error.value = "Service Worker não registrado. Notificações não disponíveis.";
+      return null;
+    }
+
+    const token = await solicitarToken(vapidKey, registration);
+    if (token) {
+      console.log("✅ Token FCM armazenado:", token);
+      pushToken.value = token;
+      localStorage.setItem("pushSubscriptionId", token);
+      await registerPushToken(token, trackingCode.value);
+      return token;
+    } else {
+      console.warn("⚠️ Nenhum token FCM recuperado. Permissão pode não ter sido concedida.");
+      error.value = "Não foi possível obter o token de notificação.";
+      return null;
+    }
+  } catch (err) {
+    console.error("❌ Erro ao obter token FCM:", err);
+    localStorage.removeItem("pushSubscriptionId");
+    error.value = `Erro ao obter token de notificação: ${err.message}`;
+    return null;
+  }
+};
+
+// Register FCM token with backend
+const registerPushToken = async (token, code) => {
+  try {
+    await axios.post(`${API_BASE_URL}/api/register-push-token`, {
+      trackingCode: code,
+      pushToken: token,
+    });
+    console.log("✅ Token FCM registrado para o código:", code);
+  } catch (err) {
+    console.warn("⚠️ Falha ao registrar token FCM:", err.response?.data || err.message);
+    error.value = `Falha ao registrar token: ${err.response?.data?.message || err.message}`;
+  }
+};
+
+// Setup foreground notifications
+const setupForegroundNotifications = () => {
+  console.log("🔧 Configurando listener de mensagens em foreground...");
+  try {
+    onMessage(messaging, (payload) => {
+      console.log("📩 Mensagem recebida em foreground:", payload);
+      const title = payload.notification?.title || "Nova Atualização";
+      const status = payload.notification?.body || "Seu pacote foi atualizado";
+
+      // Extrair o código de rastreamento da URL ou do payload
+      const url = payload.data?.url || "";
+      const trackingCodeMatch = url.match(/code=([A-Z0-9]+)/);
+      const trackingCodeFromPayload = trackingCodeMatch ? trackingCodeMatch[1] : "Desconhecido";
+
+      // Obter data/hora atual no formato brasileiro
+      const now = new Date();
+      const currentDateTime = now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+      // Construir a mensagem com status, código e data/hora
+      const body = `${status}\nCódigo: ${trackingCodeFromPayload}\nData/Hora: ${currentDateTime}`;
+
+      const options = {
+        body: body,
+        icon: "/icon.png",
+        badge: "/badge.png",
+        data: { url: payload.data?.url || "http://localhost:3000" },
+        requireInteraction: true,
+      };
+
+      // Verificar permissões antes de exibir
+      if (Notification.permission !== "granted") {
+        console.warn("⚠️ Permissão de notificação não concedida para exibir em foreground.");
+        notificationMessage.value = body;
+        snackbar.value = true;
+        return;
+      }
+
+      try {
+        const notification = new Notification(title, options);
+        console.log("✅ Notificação em foreground exibida com sucesso:", notification);
+        notificationMessage.value = body;
+        snackbar.value = true;
+
+        // Adicionar evento de clique para redirecionar
+        notification.onclick = (event) => {
+          event.preventDefault();
+          window.open(options.data.url, "_blank");
+        };
+      } catch (err) {
+        console.error("❌ Erro ao exibir notificação em foreground:", err);
+        error.value = "Erro ao exibir notificação: " + err.message;
+        notificationMessage.value = body;
+        snackbar.value = true;
+      }
+    });
+    console.log("✅ Listener de mensagens em foreground configurado com sucesso.");
+  } catch (err) {
+    console.error("❌ Erro ao configurar listener de mensagens em foreground:", err);
+    error.value = `Erro ao configurar notificações em foreground: ${err.message}`;
+  }
+};
+
+// Initialize notifications
+const initializeNotifications = async () => {
+  try {
+    if ("Notification" in window) {
+      console.log("🔍 Verificando permissões de notificação...");
+      if (Notification.permission === "granted") {
+        console.log("✅ Permissão de notificação já concedida.");
+        const token = await getFCMToken();
+        if (token) {
+          setupForegroundNotifications();
+
+          // Teste manual para verificar se onMessage funciona
+          console.log("🔍 Testando recebimento de mensagens em foreground...");
+          onMessage(messaging, (testPayload) => {
+            console.log("📩 Teste: Mensagem recebida em foreground (teste adicional):", testPayload);
+          });
+        }
+      } else if (Notification.permission !== "denied") {
+        console.log("📢 Solicitando permissão de notificação...");
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          console.log("✅ Permissão de notificação concedida.");
+          const token = await getFCMToken();
+          if (token) {
+            setupForegroundNotifications();
+
+            // Teste manual para verificar se onMessage funciona
+            console.log("🔍 Testando recebimento de mensagens em foreground...");
+            onMessage(messaging, (testPayload) => {
+              console.log("📩 Teste: Mensagem recebida em foreground (teste adicional):", testPayload);
+            });
+          }
+        } else {
+          console.warn("ℹ️ Permissão de notificação negada pelo usuário.");
+          error.value = "Permissão de notificação negada.";
+        }
+      } else {
+        console.warn("⚠️ Permissão de notificação negada permanentemente.");
+        error.value = "Permissões de notificação negadas permanentemente.";
+      }
+    } else {
+      console.warn("⚠️ Este navegador não suporta notificações.");
+      error.value = "Notificações não são suportadas neste navegador.";
+    }
+  } catch (err) {
+    console.error("❌ Erro ao inicializar notificações:", err);
+    error.value = `Erro ao inicializar notificações push: ${err.message}`;
+  }
+};
+
+// Initialize on component mount
+onMounted(async () => {
+  // Load tracking history
+  const savedHistory = localStorage.getItem("trackingHistory");
+  if (savedHistory) {
+    try {
+      trackingHistory.value = JSON.parse(savedHistory);
+    } catch (err) {
+      console.error("❌ Erro ao carregar histórico:", err);
+    }
+  }
+
+  // Setup notifications
+  await initializeNotifications();
+});
+
+// Track package
+const trackPackage = async () => {
+  error.value = "";
+  trackingResult.value = null;
+  loading.value = true;
+
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/track`, { code: trackingCode.value });
+    console.log("📦 Resposta bruta /api/track:", response);
+
+    if (!response.data || typeof response.data !== "object" || !("json" in response.data)) {
+      throw new Error("Resposta inválida do servidor: campo 'json' ausente ou malformado.");
+    }
+
+    let result;
+    try {
+      const jsonString = response.data.json.trim();
+      if (typeof jsonString !== "string") throw new Error("Campo JSON não é uma string.");
+      result = JSON.parse(jsonString);
+    } catch (parseErr) {
+      throw new Error(`Erro ao interpretar resposta JSON: ${parseErr.message}`);
+    }
+
+    if (result.erro) {
+      error.value = result.mensagem || "Erro ao consultar o rastreio.";
+      return;
+    }
+
+    trackingResult.value = result;
+
+    if (trackingResult.value.eventos) {
+      if (trackingResult.value?.codObjeto) {
+        trackingHistory.value = trackingHistory.value.filter(
+          (entry) => entry.result.codObjeto !== trackingResult.value?.codObjeto
+        );
+      }
+
+      const historyEntry = {
+        code: trackingCode.value,
+        result: trackingResult.value,
+        timestamp: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+      };
+      trackingHistory.value.unshift(historyEntry);
+      localStorage.setItem("trackingHistory", JSON.stringify(trackingHistory.value));
+
+      const token = pushToken.value || (await getFCMToken());
+      if (token) {
+        await registerPushToken(token, trackingCode.value);
+      } else {
+        console.warn("⚠️ Nenhum token FCM disponível para registrar.");
+      }
+    }
+  } catch (err) {
+    error.value = err.response?.data?.message || `Erro ao consultar o rastreio: ${err.message}`;
+    console.error("❌ Erro de rastreamento:", err);
+  } finally {
+    loading.value = false;
+    if (form.value) form.value.resetValidation();
+  }
+};
+
+// Format date and time
+const formatDateTime = (dateObj) => {
+  if (!dateObj?.date) return "-";
+  const date = new Date(dateObj.date.replace(" ", "T"));
+  return date.toLocaleString("pt-BR", { timeZone: dateObj?.timezone || "America/Sao_Paulo" });
+};
+
+// Get location
+const getLocation = (unidade) => {
+  if (!unidade) return "-, -";
+  const city = unidade.endereco?.cidade || unidade.nome || "-";
+  const uf = unidade.endereco?.uf || "-";
+  return `${city}, ${uf}`;
+};
+
+// Calculate transit days
+const getTransitDays = () => {
+  const eventos = trackingResult.value?.eventos || [];
+  const postagem = eventos.find((e) => e.descricaoFrontEnd === "Postado");
+  const entrega = eventos.find((e) => e.descricaoFrontEnd === "ENTREGUE");
+
+  if (!postagem) return { days: "-", label: "dias" };
+
+  const start = new Date(postagem.dtHrCriado.date.replace(" ", "T"));
+  const end = entrega ? new Date(entrega.dtHrCriado.date.replace(" ", "T")) : new Date();
+
+  const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+  return { days: diff, label: diff === 1 ? "dia" : "dias" };
+};
+
+// Get event color
+const getEventColor = (event) => {
+  if (event?.finalizador === "S") return "success";
+  if (event?.descricaoFrontEnd === "Postado") return "teal";
+  return "primary";
+};
+
+// View history entry
+const viewHistoryEntry = (entry) => {
+  trackingCode.value = entry.code;
+  trackingResult.value = entry.result;
+  error.value = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+// Format timestamp
+const formatTimestamp = (timestamp) => {
+  return new Date(timestamp).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+};
+
+// Get latest status
+const getLatestStatus = (result) => {
+  return result?.eventos?.[0]?.descricaoFrontEnd || "-";
+};
+</script>
 
 <style scoped>
 .v-card {
