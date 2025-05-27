@@ -85,25 +85,3 @@ rastreio-encomendas-frontend/
 
 ## Contribuindo
 
-1. Faça um fork do repositório.
-2. Crie uma branch para sua feature:
-   ```bash
-   git checkout -b feature/nova-funcionalidade
-   ```
-3. Commit suas mudanças:
-   ```bash
-   git commit -m "Adiciona nova funcionalidade"
-   ```
-4. Envie para o repositório remoto:
-   ```bash
-   git push origin feature/nova-funcionalidade
-   ```
-5. Abra um Pull Request.
-
-## Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
-## Contato
-
-Para dúvidas ou sugestões, entre em contato em [seu-email@exemplo.com](mailto:seu-email@exemplo.com) ou abra uma issue no GitHub.
