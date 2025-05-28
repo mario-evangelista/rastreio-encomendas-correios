@@ -40,7 +40,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: "autoUpdate",
-      devOptions: { enabled: false }, // Disable in dev
+      devOptions: { enabled: false },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg}"],
         cleanupOutdatedCaches: true,
