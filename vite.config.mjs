@@ -89,7 +89,7 @@ export default defineConfig({
     proxy: {
       "/api": {
         //target: "http://localhost:8080",
-        target: "https://api-proxy-labs-wonca.onrender.com"
+        target: "https://api-proxy-labs-wonca.onrender.com",
         changeOrigin: true,
       },
     },
