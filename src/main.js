@@ -18,7 +18,9 @@ const app = createApp(App);
 app.use(vuetify);
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+  //import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+  import.meta.env.VITE_API_BASE_URL || "https://api-proxy-labs-wonca.onrender.com";
+
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
