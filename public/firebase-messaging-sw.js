@@ -42,7 +42,8 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: body,
     icon: payload.notification?.icon || "/icon.png",
-    data: { url: payload.data?.url || "http://localhost:3000" },
+    //data: { url: payload.data?.url || "http://localhost:3000" },
+    data: { url: payload.data?.url || "https://rastreio-encomendas-correios.onrender.com" },
     requireInteraction: payload.notification?.requireInteraction || true,
   };
 
