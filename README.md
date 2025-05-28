@@ -28,14 +28,19 @@ A interface oferece:
 
 1. Clone o repositório:
    ```bash
-   git clone https://github.com/mario-evangelista/rastreio-encomendas-frontend.git
-   cd rastreio-encomendas-frontend
+   git clone https://github.com/mario-evangelista/rastreio-encomendas-correios.git
+   cd rastreio-encomendas-correios
    ```
 
 2. Instale as dependências:
    ```bash
    npm install
    ```
+
+2. Clone o repositório do Backend (Java 17 + Srping Boot):
+   ```bash
+   git ttps://github.com/mario-evangelista/api-proxy-labs-wonca.git
+   ```   
 
 3. Configure as variáveis de ambiente:
    - Crie um arquivo `.env` na raiz do projeto com o seguinte conteúdo:
