@@ -28,7 +28,7 @@ A interface oferece:
 
 1. Clone o repositório:
    ```bash
-   git clone https://github.com/seu-usuario/rastreio-encomendas-frontend.git
+   git clone https://github.com/mario-evangelista/rastreio-encomendas-frontend.git
    cd rastreio-encomendas-frontend
    ```
 
@@ -60,6 +60,7 @@ A interface oferece:
 ## Uso
 
 - Insira um código de rastreamento válido (ex.: `AA123456789BR`) no formulário.
+- Códigos para Teste (AM001396702BR, AK701276615BR, ND510007744BR, AM414094794BR)
 - Clique em "Rastrear" para visualizar os detalhes.
 - Receba notificações push quando houver atualizações de status (requer permissão do navegador).
 - Acesse o histórico de rastreamentos na seção correspondente.
@@ -83,5 +84,5 @@ rastreio-encomendas-frontend/
 └── README.md                 # Este arquivo
 ```
 
-## Contribuindo
-
+## Demostração
+- https://rastreio-encomendas-correios.onrender.com
