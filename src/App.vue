@@ -11,7 +11,7 @@
           </v-card-title>
           <v-card-title class="text-h5 text-center">Rastreamento de Encomendas - Correios</v-card-title>
           <v-card-text>
-            <v-form @submit.prevent="trackPackage">
+            <v-form ref="form" @submit.prevent="trackPackage">
               <v-text-field v-model="trackingCode" label="Código de Rastreio" placeholder="Ex: AA123456789BR"
                 :rules="rules" counter="13" maxlength="13" prepend-inner-icon="mdi-package-variant"
                 :disabled="loading"></v-text-field>
@@ -129,7 +129,6 @@ import { ref, onMounted } from "vue";
 import axios from "axios";
 import { messaging, solicitarToken, onMessage } from "@/firebase";
 
-// Reactive state
 const trackingCode = ref("");
 const trackingResult = ref(null);
 const error = ref("");
@@ -141,16 +140,16 @@ const notificationMessage = ref("");
 const valid = ref(false);
 const form = ref(null);
 
-// Environment configuration
+// Configuração do ambiente - API de Middleware
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
-// Validation rules for tracking code
+// Regras de validação para código de rastreamento
 const rules = [
   (value) => !!value || "Código de rastreio é obrigatório",
   (value) => /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(value) || "Código deve ter 13 caracteres (ex: AA123456789BR)",
 ];
 
-// Fetch FCM token
+// Obter token FCM - Firebase Cloud Messaging - Google
 const getFCMToken = async () => {
   try {
     const savedToken = localStorage.getItem("pushSubscriptionId");
@@ -188,7 +187,7 @@ const getFCMToken = async () => {
   }
 };
 
-// Register FCM token with backend
+// Registra o token FCM no backend
 const registerPushToken = async (token, code) => {
   try {
     await axios.post(`${API_BASE_URL}/api/register-push-token`, {
@@ -202,7 +201,7 @@ const registerPushToken = async (token, code) => {
   }
 };
 
-// Setup foreground notifications
+// Configura as notificações em primeiro plano
 const setupForegroundNotifications = () => {
   console.log("🔧 Configurando listener de mensagens em foreground...");
   try {
@@ -211,7 +210,7 @@ const setupForegroundNotifications = () => {
       const title = payload.notification?.title || "Nova Atualização";
       const status = payload.notification?.body || "Seu pacote foi atualizado";
 
-      // Extrair o código de rastreamento da URL ou do payload
+      // Extrai o código de rastreamento da URL ou do payload
       const url = payload.data?.url || "";
       const trackingCodeMatch = url.match(/code=([A-Z0-9]+)/);
       const trackingCodeFromPayload = trackingCodeMatch ? trackingCodeMatch[1] : "Desconhecido";
@@ -231,7 +230,7 @@ const setupForegroundNotifications = () => {
         requireInteraction: true,
       };
 
-      // Verificar permissões antes de exibir
+      // Verifica as permissões antes de exibir
       if (Notification.permission !== "granted") {
         console.warn("⚠️ Permissão de notificação não concedida para exibir em foreground.");
         notificationMessage.value = body;
@@ -245,7 +244,7 @@ const setupForegroundNotifications = () => {
         notificationMessage.value = body;
         snackbar.value = true;
 
-        // Adicionar evento de clique para redirecionar
+        // Adiciona um evento de clique para redirecionar
         notification.onclick = (event) => {
           event.preventDefault();
           window.open(options.data.url, "_blank");
@@ -264,7 +263,7 @@ const setupForegroundNotifications = () => {
   }
 };
 
-// Initialize notifications
+// Iniciaando as notificações
 const initializeNotifications = async () => {
   try {
     if ("Notification" in window) {
@@ -314,23 +313,34 @@ const initializeNotifications = async () => {
   }
 };
 
-// Initialize on component mount
+// Iniciar na montagem do componente
 onMounted(async () => {
-  // Load tracking history
+  // Carrega o histórico de rastreamento
   const savedHistory = localStorage.getItem("trackingHistory");
   if (savedHistory) {
     try {
       trackingHistory.value = JSON.parse(savedHistory);
+      trackingHistory.value = trackingHistory.value.map(entry => {
+        if (entry.timestamp && new Date(entry.timestamp).toString() === "Data Inválida") {
+          const match = entry.timestamp.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+          if (match) {
+            const [_, day, month, year, hour, minute, second] = match;
+            entry.timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`).toISOString();
+          } else {
+            entry.timestamp = new Date().toISOString();
+          }
+        }
+        return entry;
+      });
+      localStorage.setItem("trackingHistory", JSON.stringify(trackingHistory.value));
     } catch (err) {
       console.error("❌ Erro ao carregar histórico:", err);
     }
   }
 
-  // Setup notifications
   await initializeNotifications();
 });
 
-// Track package
 const trackPackage = async () => {
   error.value = "";
   trackingResult.value = null;
@@ -370,7 +380,7 @@ const trackPackage = async () => {
       const historyEntry = {
         code: trackingCode.value,
         result: trackingResult.value,
-        timestamp: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+        timestamp: new Date().toISOString(),
       };
       trackingHistory.value.unshift(historyEntry);
       localStorage.setItem("trackingHistory", JSON.stringify(trackingHistory.value));
@@ -391,14 +401,14 @@ const trackPackage = async () => {
   }
 };
 
-// Format date and time
+// Formata data e hora
 const formatDateTime = (dateObj) => {
   if (!dateObj?.date) return "-";
   const date = new Date(dateObj.date.replace(" ", "T"));
   return date.toLocaleString("pt-BR", { timeZone: dateObj?.timezone || "America/Sao_Paulo" });
 };
 
-// Get location
+// Obtem localização
 const getLocation = (unidade) => {
   if (!unidade) return "-, -";
   const city = unidade.endereco?.cidade || unidade.nome || "-";
@@ -406,7 +416,7 @@ const getLocation = (unidade) => {
   return `${city}, ${uf}`;
 };
 
-// Calculate transit days
+// Calcular os dias em trânsito
 const getTransitDays = () => {
   const eventos = trackingResult.value?.eventos || [];
   const postagem = eventos.find((e) => e.descricaoFrontEnd === "Postado");
@@ -421,14 +431,14 @@ const getTransitDays = () => {
   return { days: diff, label: diff === 1 ? "dia" : "dias" };
 };
 
-// Get event color
+// Obtem a cor do evento
 const getEventColor = (event) => {
   if (event?.finalizador === "S") return "success";
   if (event?.descricaoFrontEnd === "Postado") return "teal";
   return "primary";
 };
 
-// View history entry
+// Voltar para o topo
 const viewHistoryEntry = (entry) => {
   trackingCode.value = entry.code;
   trackingResult.value = entry.result;
@@ -436,14 +446,31 @@ const viewHistoryEntry = (entry) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-// Format timestamp
+// Formata a data/hora
 const formatTimestamp = (timestamp) => {
-  return new Date(timestamp).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    console.warn("⚠️ Timestamp inválido:", timestamp);
+    return "-";
+  }
+  return date.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 };
 
-// Get latest status
+// Status mais recente
 const getLatestStatus = (result) => {
   return result?.eventos?.[0]?.descricaoFrontEnd || "-";
+};
+
+// Ao clicar no titulo - Atualizar página e limpar formulário
+const refreshPage = () => {
+  trackingCode.value = ""; // Limpa o campo de entrada
+  if (form.value) {
+    form.value.reset(); // Reseta o formulário (limpa validações e valores)
+    form.value.resetValidation(); // Limpa mensagens de validação
+  }
+  trackingResult.value = null; // Limpa os resultados do rastreamento
+  error.value = ""; // Limpa mensagens de erro
+  window.location.reload(); // Atualiza a página
 };
 </script>
 
