@@ -61,7 +61,7 @@ A interface oferece:
 2. Habilite o Cloud Messaging e obtenha a chave VAPID.
 3. Atualize o arquivo `firebase.js` com as credenciais do Firebase (substitua os valores em `firebaseConfig`).
 4. Registre o Service Worker (`firebase-messaging-sw.js`) no diretório `public/`.
-5. Documentação: https://firebase.google.com/docs/cloud-messaging/js/client?hl=pt-br#web_1
+5. Documentação Firebase Notificação Web Push: https://firebase.google.com/docs/cloud-messaging/js/client?hl=pt-br
 
 ## Uso
 
